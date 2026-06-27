@@ -1,53 +1,35 @@
-import { jsx as _jsx } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { validateInvitationToken } from "../services/api";
-import LoadingSpinner from "../components/common/LoadingSpinner";
-import ClientAssessmentFlow from "./ClientAssessmentFlow";
-import ClientReportPage from "./ClientReportPage";
-import ClientErrorPage from "./ClientErrorPage";
 export default function ClientPortalPage() {
     const { token } = useParams();
-    const [state, setState] = useState("loading");
-    const [invitation, setInvitation] = useState(null);
+    const [status, setStatus] = useState("loading");
     useEffect(() => {
-        async function checkToken() {
-            if (!token) {
-                setState("invalid");
-                return;
-            }
-            try {
-                const response = await validateInvitationToken(token);
-                if (response.success && response.data) {
-                    setInvitation(response.data);
-                    setState(response.data.status);
-                }
-                else {
-                    setState("invalid");
-                }
-            }
-            catch (err) {
-                if (err?.response?.status === 410) {
-                    setState("expired");
-                }
-                else {
-                    setState("invalid");
-                }
-            }
+        if (!token) {
+            setStatus("invalid");
+            return;
         }
-        checkToken();
+        validateInvitationToken(token)
+            .then(res => {
+            if (res.success && res.data) {
+                setStatus(res.data.status);
+            }
+            else {
+                setStatus("invalid");
+            }
+        })
+            .catch(() => setStatus("invalid"));
     }, [token]);
-    if (state === "loading")
-        return _jsx(LoadingSpinner, { message: "Validating your link..." });
-    if (state === "expired")
-        return _jsx(ClientErrorPage, { type: "expired" });
-    if (state === "invalid")
-        return _jsx(ClientErrorPage, { type: "invalid" });
-    if (state === "completed" && invitation?.assessmentId) {
-        return _jsx(ClientReportPage, { assessmentId: invitation.assessmentId, token: token });
-    }
-    if (state === "pending" && invitation) {
-        return (_jsx(ClientAssessmentFlow, { token: token, companyName: invitation.companyName, email: invitation.email, industry: invitation.industry }));
-    }
-    return _jsx(ClientErrorPage, { type: "invalid" });
+    if (status === "loading")
+        return (_jsx("div", { style: { textAlign: "center", padding: "80px", color: "#185FA5" }, children: "Validating your link..." }));
+    if (status === "expired")
+        return (_jsxs("div", { style: { textAlign: "center", padding: "80px" }, children: [_jsx("h2", { style: { color: "#791F1F" }, children: "Link Expired" }), _jsx("p", { style: { color: "#6b7280" }, children: "This invitation link has expired. Please contact KlayyTech for a new link." })] }));
+    if (status === "invalid")
+        return (_jsxs("div", { style: { textAlign: "center", padding: "80px" }, children: [_jsx("h2", { style: { color: "#791F1F" }, children: "Invalid Link" }), _jsx("p", { style: { color: "#6b7280" }, children: "This link is not valid. Please check the URL or contact KlayyTech." })] }));
+    if (status === "completed")
+        return (_jsxs("div", { style: { textAlign: "center", padding: "80px" }, children: [_jsx("h2", { style: { color: "#27500A" }, children: "Assessment Complete" }), _jsx("p", { style: { color: "#6b7280" }, children: "Your assessment has already been submitted. KlayyTech will be in touch shortly." })] }));
+    if (status === "pending")
+        return (_jsxs("div", { style: { textAlign: "center", padding: "80px" }, children: [_jsx("h2", { style: { color: "#185FA5" }, children: "Assessment Ready" }), _jsx("p", { style: { color: "#6b7280" }, children: "Your assessment link is valid. Assessment flow coming soon." })] }));
+    return null;
 }

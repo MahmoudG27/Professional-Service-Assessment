@@ -1,9 +1,19 @@
-const BASE_URL = import.meta.env.VITE_API_URL;
+import type { CompanyProfile } from "../types/companyProfile";
+import type { AssessmentAnswers } from "../types/scenario";
+import type { ProfessionalServicesReport } from "../reports/professionalServicesReport";
+
+interface ApiResponse<T> {
+  success: boolean;
+  data: T | null;
+  error: string | null;
+}
+
+const BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "http://localhost:7071/api";
 const FUNCTION_KEY = import.meta.env.VITE_FUNCTION_KEY;
 
 const headers = {
   "Content-Type": "application/json",
-  "x-functions-key": FUNCTION_KEY,
+  ...(FUNCTION_KEY ? { "x-functions-key": FUNCTION_KEY } : {}),
   "x-user-id": import.meta.env.VITE_USER_ID ?? "anonymous",
 };
 
@@ -69,5 +79,38 @@ export async function sendReport(id: string, email: string) {
     headers,
     body: JSON.stringify({ email }),
   });
+  return res.json();
+}
+
+// ===== Invitation APIs =====
+export async function validateInvitationToken(token: string): Promise<ApiResponse<{
+  status: string;
+  companyName: string;
+  email: string;
+  industry: string | null;
+  expiresAt: string;
+  assessmentId: string | null;
+}>> {
+  const res = await fetch(`${BASE_URL}/invitations/${token}/validate`, { headers });
+  return res.json();
+}
+
+export async function createInvitation(data: {
+  email: string;
+  companyName: string;
+  industry?: string;
+  notes?: string;
+  createdBy: string;
+}): Promise<ApiResponse<{ token: string; inviteUrl: string; expiresAt: string }>> {
+  const res = await fetch(`${BASE_URL}/invitations/create`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function getInvitations(): Promise<ApiResponse<any[]>> {
+  const res = await fetch(`${BASE_URL}/invitations`, { headers });
   return res.json();
 }

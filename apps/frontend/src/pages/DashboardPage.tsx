@@ -1,14 +1,69 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAssessments } from "../services/api";
-import { AssessmentDocument } from "../types/assessment";
-import Card from "../components/common/Card";
-import Button from "../components/common/Button";
-import LoadingSpinner from "../components/common/LoadingSpinner";
+
+interface AssessmentListItem {
+  id: string;
+  companyName: string;
+  scenarioId: string;
+  status: "draft" | "completed" | "failed";
+  createdAt: string;
+  complexityLevel: string | null;
+  mandayMin: number | null;
+  mandayMax: number | null;
+  servicePriceMin: number | null;
+  servicePriceMax: number | null;
+  confidenceScore: number | null;
+}
+
+const SCENARIO_LABELS: Record<string, string> = {
+  "azure-migration":          "Azure Migration",
+  "modernization":            "Modernization",
+  "disaster-recovery":        "Disaster Recovery",
+  "security-assessment":      "Security Assessment",
+  "subscription-optimization": "Cost Optimization",
+  "subscription-migration":   "Sub Migration",
+};
+
+function complexityColor(level: string | null): string {
+  if (!level) return "#9ca3af";
+  if (level.includes("Enterprise")) return "#791F1F";
+  if (level.includes("High"))       return "#7A4F0A";
+  if (level.includes("Medium"))     return "#0C447C";
+  return "#27500A";
+}
+
+function complexityBg(level: string | null): string {
+  if (!level) return "#f3f4f6";
+  if (level.includes("Enterprise")) return "#FCEBEB";
+  if (level.includes("High"))       return "#FAF0DC";
+  if (level.includes("Medium"))     return "#E6F1FB";
+  return "#EAF3DE";
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, React.CSSProperties> = {
+    completed:  { background: "#EAF3DE", color: "#27500A" },
+    generating: { background: "#E6F1FB", color: "#0C447C" },
+    draft:      { background: "#F1EFE8", color: "#5F5E5A" },
+    failed:     { background: "#FCEBEB", color: "#791F1F" },
+  };
+  return (
+    <span style={{
+      ...(styles[status] ?? styles.draft),
+      padding: "3px 10px",
+      borderRadius: "20px",
+      fontSize: "11px",
+      fontWeight: 500,
+    }}>
+      {status}
+    </span>
+  );
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [assessments, setAssessments] = useState<Partial<AssessmentDocument>[]>([]);
+  const [assessments, setAssessments] = useState<AssessmentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +74,7 @@ export default function DashboardPage() {
         if (response.success) {
           setAssessments(response.data);
         } else {
-          setError(response.error || "Failed to load assessments");
+          setError(response.error ?? "Failed to load assessments");
         }
       } catch {
         setError("Failed to connect to server");
@@ -30,176 +85,231 @@ export default function DashboardPage() {
     fetchAssessments();
   }, []);
 
-  function getStatusBadge(status: string) {
-    const styles: Record<string, React.CSSProperties> = {
-      completed: { background: "#EAF3DE", color: "#27500A" },
-      generating: { background: "#E6F1FB", color: "#0C447C" },
-      draft: { background: "#F1EFE8", color: "#5F5E5A" },
-      failed: { background: "#FCEBEB", color: "#791F1F" },
-    };
-    return (
-      <span style={{
-        ...styles[status] || styles.draft,
-        padding: "3px 10px",
-        borderRadius: "20px",
-        fontSize: "11px",
-        fontWeight: 500
-      }}>
-        {status}
-      </span>
-    );
-  }
-
-  function getScoreColor(score: number) {
-    if (score >= 71) return "#639922";
-    if (score >= 41) return "#BA7517";
-    return "#E24B4A";
-  }
-
-  if (loading) return <LoadingSpinner message="Loading assessments..." />;
+  // ── Metrics ──
+  const total      = assessments.length;
+  const enterprise = assessments.filter(a => a.complexityLevel?.includes("Enterprise")).length;
+  const high       = assessments.filter(a => a.complexityLevel?.includes("High") && !a.complexityLevel?.includes("Enterprise")).length;
+  const medium     = assessments.filter(a => a.complexityLevel?.includes("Medium")).length;
+  const low        = assessments.filter(a => a.complexityLevel?.includes("Low") && !a.complexityLevel?.includes("Low C") === false).length;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f9fafb" }}>
-      {/* Topbar */}
+    <div style={{ minHeight: "100vh", background: "#f8fafc" }}>
+
+      {/* ── Top bar ── */}
       <div style={{
         background: "#fff",
-        borderBottom: "0.5px solid #e5e7eb",
-        padding: "12px 24px",
+        borderBottom: "1px solid #e5e7eb",
+        padding: "12px 28px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between"
+        justifyContent: "space-between",
       }}>
-        <span style={{ fontSize: "15px", fontWeight: 500 }}>
+        <span style={{ fontSize: "15px", fontWeight: 600, color: "#111827" }}>
           KlayyTech <span style={{ color: "#185FA5" }}>CloudReady</span>
         </span>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <Button onClick={() => navigate("/invitations")}>Invitations</Button>
-          <Button variant="primary" onClick={() => navigate("/assessment")}>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={() => navigate("/invitations")}
+            style={outlineBtn}
+          >
+            Invitations
+          </button>
+          <button
+            onClick={() => navigate("/assessment")}
+            style={primaryBtn}
+          >
             + New assessment
-          </Button>
+          </button>
         </div>
       </div>
 
-      <div style={{ padding: "24px", maxWidth: "1100px", margin: "0 auto" }}>
-        {/* Metrics */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "24px" }}>
+      <div style={{ padding: "28px", maxWidth: "1200px", margin: "0 auto" }}>
+
+        {/* ── Metrics ── */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "12px",
+          marginBottom: "24px",
+        }}>
           {[
-            { label: "Total assessments", value: assessments.length, color: "#374151" },
-            {
-              label: "Advanced", color: "#27500A",
-              value: assessments.filter(a => a.insights?.level === "Advanced").length
-            },
-            {
-              label: "Developing", color: "#BA7517",
-              value: assessments.filter(a => a.insights?.level === "Developing").length
-            },
-            {
-              label: "Beginner", color: "#E24B4A",
-              value: assessments.filter(a => a.insights?.level === "Beginner").length
-            },
-          ].map((metric) => (
-            <div key={metric.label} style={{
-              background: "#f3f4f6",
-              borderRadius: "8px",
-              padding: "14px 16px"
+            { label: "Total assessments", value: total,      color: "#374151" },
+            { label: "Enterprise",        value: enterprise, color: "#791F1F" },
+            { label: "High",              value: high,       color: "#7A4F0A" },
+            { label: "Medium",            value: medium,     color: "#0C447C" },
+          ].map(m => (
+            <div key={m.label} style={{
+              background: "#fff",
+              borderRadius: "10px",
+              padding: "16px 20px",
+              border: "1px solid #e5e7eb",
             }}>
-              <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>{metric.label}</div>
-              <div style={{ fontSize: "22px", fontWeight: 500, color: metric.color }}>{metric.value}</div>
+              <div style={{ fontSize: "11px", color: "#6b7280", marginBottom: "6px" }}>
+                {m.label}
+              </div>
+              <div style={{ fontSize: "26px", fontWeight: 600, color: m.color }}>
+                {m.value}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Table */}
-        <Card>
-          <div style={{ fontSize: "14px", fontWeight: 500, marginBottom: "16px" }}>
-            Recent assessments
+        {/* ── Table ── */}
+        <div style={{
+          background: "#fff",
+          borderRadius: "12px",
+          border: "1px solid #e5e7eb",
+          overflow: "hidden",
+        }}>
+          <div style={{ padding: "18px 24px", borderBottom: "1px solid #f3f4f6" }}>
+            <span style={{ fontSize: "14px", fontWeight: 600, color: "#111827" }}>
+              Recent assessments
+            </span>
           </div>
 
+          {loading && (
+            <div style={{ padding: "48px", textAlign: "center", color: "#6b7280" }}>
+              Loading assessments...
+            </div>
+          )}
+
           {error && (
-            <div style={{ padding: "12px", background: "#FCEBEB", color: "#791F1F", borderRadius: "8px", marginBottom: "12px", fontSize: "13px" }}>
+            <div style={{ padding: "16px 24px", background: "#FCEBEB", color: "#791F1F", fontSize: "13px" }}>
               {error}
             </div>
           )}
 
-          {assessments.length === 0 && !error ? (
-            <div style={{ textAlign: "center", padding: "48px", color: "#6b7280" }}>
+          {!loading && assessments.length === 0 && !error && (
+            <div style={{ padding: "64px", textAlign: "center", color: "#6b7280" }}>
               <div style={{ fontSize: "16px", fontWeight: 500, marginBottom: "8px" }}>
                 No assessments yet
               </div>
               <div style={{ fontSize: "13px", marginBottom: "20px" }}>
-                Start your first cloud readiness evaluation
+                Start your first professional services assessment
               </div>
-              <Button variant="primary" onClick={() => navigate("/assessment")}>
+              <button
+                onClick={() => navigate("/assessment")}
+                style={primaryBtn}
+              >
                 Start assessment
-              </Button>
+              </button>
             </div>
-          ) : (
-            <div>
-              {/* Table Header */}
+          )}
+
+          {!loading && assessments.length > 0 && (
+            <>
+              {/* Table header */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr",
-                padding: "8px 12px",
+                gridTemplateColumns: "2fr 1.4fr 1.2fr 1.2fr 0.8fr 1fr",
+                padding: "10px 24px",
                 background: "#f9fafb",
-                borderRadius: "8px",
-                marginBottom: "4px"
+                borderBottom: "1px solid #e5e7eb",
               }}>
-                {["Company", "Industry", "Score", "Level", "Actions"].map(h => (
-                  <span key={h} style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500 }}>{h}</span>
+                {["Company", "Scenario", "Complexity", "Effort", "Status", "Actions"].map(h => (
+                  <span key={h} style={{ fontSize: "11px", color: "#6b7280", fontWeight: 600 }}>
+                    {h}
+                  </span>
                 ))}
               </div>
 
-              {assessments.map((assessment) => {
-                const score = assessment.score?.total ?? assessment.report?.data?.readinessScore?.total ?? 0;
-                const industry = assessment.industry ?? assessment.report?.data?.companyOverview?.industry ?? "—";
-                return (
-                  <div key={assessment.id} style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr 2fr 1fr 1fr",
-                    padding: "12px",
-                    borderBottom: "0.5px solid #e5e7eb",
-                    alignItems: "center"
-                  }}>
-                    {/* Company */}
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 500 }}>{assessment.companyName}</div>
-                      <div style={{ fontSize: "11px", color: "#6b7280" }}>
-                        {new Date(assessment.createdAt!).toLocaleDateString()}
-                      </div>
+              {/* Table rows */}
+              {assessments.map(a => (
+                <div key={a.id} style={{
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1.4fr 1.2fr 1.2fr 0.8fr 1fr",
+                  padding: "14px 24px",
+                  borderBottom: "1px solid #f3f4f6",
+                  alignItems: "center",
+                }}>
+                  {/* Company */}
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 500, color: "#111827" }}>
+                      {a.companyName}
                     </div>
-
-                    {/* Industry */}
-                    <span style={{ fontSize: "13px", color: "#6b7280" }}>
-                      {industry}
-                    </span>
-
-                    {/* Score */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ flex: 1, height: "6px", background: "#e5e7eb", borderRadius: "3px", overflow: "hidden" }}>
-                        <div style={{ width: `${score}%`, height: "100%", background: getScoreColor(score), borderRadius: "3px" }} />
-                      </div>
-                      <span style={{ fontSize: "12px", minWidth: "24px" }}>{score}</span>
-                    </div>
-
-                    {/* Status */}
-                    <span>{getStatusBadge(assessment.status ?? "draft")}</span>
-
-                    {/* Actions */}
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <Button
-                        onClick={() => navigate(`/report/${assessment.id}`)}
-                        disabled={assessment.status !== "completed"}
-                      >
-                        View
-                      </Button>
+                    <div style={{ fontSize: "11px", color: "#9ca3af" }}>
+                      {new Date(a.createdAt).toLocaleDateString("en-GB", {
+                        day: "numeric", month: "short", year: "numeric"
+                      })}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Scenario */}
+                  <span style={{ fontSize: "12px", color: "#374151" }}>
+                    {SCENARIO_LABELS[a.scenarioId] ?? a.scenarioId}
+                  </span>
+
+                  {/* Complexity */}
+                  <span style={{
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    background: complexityBg(a.complexityLevel),
+                    color: complexityColor(a.complexityLevel),
+                    display: "inline-block",
+                  }}>
+                    {a.complexityLevel ?? "—"}
+                  </span>
+
+                  {/* Effort */}
+                  <span style={{ fontSize: "12px", color: "#374151" }}>
+                    {a.mandayMin && a.mandayMax
+                      ? `${a.mandayMin}–${a.mandayMax} days`
+                      : a.mandayMin
+                      ? `${a.mandayMin}+ days`
+                      : "—"}
+                  </span>
+
+                  {/* Status */}
+                  <StatusBadge status={a.status} />
+
+                  {/* Actions */}
+                  <button
+                    onClick={() => navigate(`/report/${a.id}`)}
+                    disabled={a.status !== "completed"}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "6px",
+                      border: "1px solid #e5e7eb",
+                      background: a.status === "completed" ? "#fff" : "#f9fafb",
+                      color: a.status === "completed" ? "#374151" : "#d1d5db",
+                      fontSize: "12px",
+                      cursor: a.status === "completed" ? "pointer" : "not-allowed",
+                      fontWeight: 500,
+                    }}
+                  >
+                    View
+                  </button>
+                </div>
+              ))}
+            </>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
 }
+
+// ── Button styles ──
+const primaryBtn: React.CSSProperties = {
+  padding: "9px 18px",
+  borderRadius: "8px",
+  border: "none",
+  background: "#185FA5",
+  color: "#fff",
+  fontSize: "13px",
+  cursor: "pointer",
+  fontWeight: 600,
+};
+
+const outlineBtn: React.CSSProperties = {
+  padding: "9px 18px",
+  borderRadius: "8px",
+  border: "1px solid #e5e7eb",
+  background: "#fff",
+  color: "#374151",
+  fontSize: "13px",
+  cursor: "pointer",
+  fontWeight: 500,
+};

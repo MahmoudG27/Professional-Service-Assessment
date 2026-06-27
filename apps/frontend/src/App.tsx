@@ -3,12 +3,14 @@ import { MsalAuthenticationTemplate } from "@azure/msal-react";
 import { InteractionType } from "@azure/msal-browser";
 import { loginRequest } from "./auth/msalConfig";
 import DashboardPage from "./pages/DashboardPage";
-import AssessmentPage from "./pages/AssessmentPage";
-import SummaryPage from "./pages/SummaryPage";
-import ReportPage from "./pages/ReportPage";
 import InvitationsPage from "./pages/InvitationsPage";
+import AssessmentWizard from "./components/assessment/AssessmentWizard";
+import ReportViewPage from "./pages/ReportViewPage";
 import ClientPortalPage from "./pages/ClientPortalPage";
 
+// ================================================================
+// Protected Layout — wraps admin routes with Entra ID auth
+// ================================================================
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <MsalAuthenticationTemplate
@@ -20,48 +22,67 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function App() {
+// ================================================================
+// App
+// ================================================================
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public route — client portal */}
+
+        {/* ── Public route — client portal (invitation token) ── */}
         <Route path="/a/:token" element={<ClientPortalPage />} />
 
-        {/* Protected routes — admin only */}
-        <Route path="/" element={
-          <ProtectedLayout>
-            <Navigate to="/dashboard" replace />
-          </ProtectedLayout>
-        } />
-        <Route path="/dashboard" element={
-          <ProtectedLayout>
-            <DashboardPage />
-          </ProtectedLayout>
-        } />
-        <Route path="/assessment" element={
-          <ProtectedLayout>
-            <AssessmentPage />
-          </ProtectedLayout>
-        } />
-        <Route path="/summary/:id" element={
-          <ProtectedLayout>
-            <SummaryPage />
-          </ProtectedLayout>
-        } />
-        <Route path="/report/:id" element={
-          <ProtectedLayout>
-            <ReportPage />
-          </ProtectedLayout>
-        } />
-        <Route path="/invitations" element={
-          <ProtectedLayout>
-            <InvitationsPage />
-          </ProtectedLayout>
-        } />
+        {/* ── Protected routes — admin / sales team ── */}
+        <Route
+          path="/"
+          element={
+            <ProtectedLayout>
+              <Navigate to="/dashboard" replace />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedLayout>
+              <DashboardPage />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/invitations"
+          element={
+            <ProtectedLayout>
+              <InvitationsPage />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/assessment"
+          element={
+            <ProtectedLayout>
+              <AssessmentWizard />
+            </ProtectedLayout>
+          }
+        />
+
+        <Route
+          path="/report/:id"
+          element={
+            <ProtectedLayout>
+              <ReportViewPage />
+            </ProtectedLayout>
+          }
+        />
+
+        {/* ── Fallback ── */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
       </Routes>
     </BrowserRouter>
   );
 }
-
-export default App;

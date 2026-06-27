@@ -1,71 +1,78 @@
-import axios from "axios";
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:7071/api";
-const FUNCTION_KEY = import.meta.env.VITE_FUNCTION_KEY || "";
-const USER_ID = import.meta.env.VITE_USER_ID || "anonymous";
-const api = axios.create({
-    baseURL: BASE_URL,
-    headers: {
-        "Content-Type": "application/json",
-        "x-functions-key": FUNCTION_KEY,
-        "x-user-id": USER_ID,
-    },
-});
-// ===== Submit Assessment =====
-export async function submitAssessment(companyName, answers, score, confidence, token) {
-    const response = await api.post("/assessment", {
-        companyName,
-        answers,
-        score,
-        confidence,
-        token,
+const BASE_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "http://localhost:7071/api";
+const FUNCTION_KEY = import.meta.env.VITE_FUNCTION_KEY;
+const headers = {
+    "Content-Type": "application/json",
+    ...(FUNCTION_KEY ? { "x-functions-key": FUNCTION_KEY } : {}),
+    "x-user-id": import.meta.env.VITE_USER_ID ?? "anonymous",
+};
+// Submit assessment + generate report
+export async function submitAndGenerateReport(companyProfile, scenarioId, scenarioAnswers) {
+    // Step 1 — Submit
+    const submitRes = await fetch(`${BASE_URL}/assessment`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ companyProfile, scenarioId, scenarioAnswers }),
     });
-    return response.data;
+    const submitData = await submitRes.json();
+    if (!submitData.success)
+        throw new Error(submitData.error);
+    const { id } = submitData.data;
+    // Step 2 — Generate report
+    const reportRes = await fetch(`${BASE_URL}/assessment/${id}/generate`, {
+        method: "POST",
+        headers,
+    });
+    const reportData = await reportRes.json();
+    if (!reportData.success)
+        throw new Error(reportData.error);
+    return reportData.data;
 }
-// ===== Generate Report =====
-export async function generateReport(id) {
-    const response = await api.post(`/assessment/${id}/generate`);
-    return response.data;
-}
-// ===== Get All Assessments =====
+// Get all assessments (dashboard)
 export async function getAssessments() {
-    const response = await api.get("/assessments");
-    return response.data;
+    const res = await fetch(`${BASE_URL}/assessments`, { headers });
+    return res.json();
 }
-// ===== Get Single Assessment =====
+// Get single assessment
 export async function getAssessment(id) {
-    const response = await api.get(`/assessment/${id}`);
-    return response.data;
+    const res = await fetch(`${BASE_URL}/assessment/${id}`, { headers });
+    return res.json();
 }
-// ===== Get Report =====
-export async function getReport(id) {
-    const response = await api.get(`/assessment/${id}/report`);
-    return response.data;
-}
-// ===== Generate PDF =====
+// Generate PDF
 export async function generatePDF(id) {
-    const response = await api.post(`/assessment/${id}/pdf`);
-    return response.data;
+    const res = await fetch(`${BASE_URL}/assessment/${id}/pdf`, {
+        method: "POST",
+        headers,
+    });
+    return res.json();
 }
-// ===== Get PDF URL =====
+// Get PDF URL
 export async function getPdfUrl(id) {
-    const response = await api.get(`/assessment/${id}/pdf-url`);
-    return response.data;
+    const res = await fetch(`${BASE_URL}/assessment/${id}/pdf-url`, { headers });
+    return res.json();
 }
-// ===== Send Report by Email =====
+// Send report to client
 export async function sendReport(id, email) {
-    const response = await api.post(`/assessment/${id}/send`, { email });
-    return response.data;
+    const res = await fetch(`${BASE_URL}/assessment/${id}/send`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ email }),
+    });
+    return res.json();
 }
 // ===== Invitation APIs =====
 export async function validateInvitationToken(token) {
-    const response = await api.get(`/invitations/${token}/validate`);
-    return response.data;
+    const res = await fetch(`${BASE_URL}/invitations/${token}/validate`, { headers });
+    return res.json();
 }
 export async function createInvitation(data) {
-    const response = await api.post("/invitations/create", data);
-    return response.data;
+    const res = await fetch(`${BASE_URL}/invitations/create`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+    });
+    return res.json();
 }
 export async function getInvitations() {
-    const response = await api.get("/invitations");
-    return response.data;
+    const res = await fetch(`${BASE_URL}/invitations`, { headers });
+    return res.json();
 }

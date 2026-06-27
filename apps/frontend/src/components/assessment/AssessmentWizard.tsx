@@ -2,12 +2,12 @@ import { useState } from "react";
 import CompanyProfileStep from "./CompanyProfileStep";
 import ServiceSelectionStep from "./ServiceSelectionStep";
 import ScenarioQuestionsStep from "./ScenarioQuestionsStep";
+import ReportPage from "./ReportPage";
 import { CompanyProfile } from "../../types/companyProfile";
 import { AssessmentAnswers } from "../../types/scenario";
-import ReportPage from "./ReportPage";
-import { evaluateScenario } from "../../engine/scenarioEngine";
-import { buildProfessionalServicesReport } from "../../reports/professionalServicesReport";
 import { getScenarioById } from "../../scenarios";
+import type { ProfessionalServicesReport } from "../../reports/professionalServicesReport";
+import { submitAndGenerateReport } from "../../services/api";
 
 // ================================================================
 // Wizard State
@@ -92,9 +92,11 @@ function ProgressBar({ step }: { step: WizardStep }) {
 // ================================================================
 // Main Wizard Component
 // ================================================================
-
 export default function AssessmentWizard() {
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
+  const [report, setReport] = useState<ProfessionalServicesReport | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const [reportId] = useState(
     () => "RPT-" + Math.random().toString(16).slice(2, 10).toUpperCase()
@@ -116,7 +118,14 @@ export default function AssessmentWizard() {
   }
 
   async function handleScenarioAnswers(answers: AssessmentAnswers) {
-    setState(prev => ({ ...prev, scenarioAnswers: answers, step: 4 as WizardStep }));
+    setLoading(true);
+    setError(null);
+
+    setState(prev => ({
+      ...prev,
+      scenarioAnswers: answers,
+      step: 4 as WizardStep,
+    }));
 
     try {
       const report = await submitAndGenerateReport(
@@ -124,9 +133,12 @@ export default function AssessmentWizard() {
         state.selectedScenarioId!,
         answers
       );
+
       setReport(report);
     } catch (err) {
       setError("Failed to generate report. Please try again.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -185,28 +197,33 @@ export default function AssessmentWizard() {
           />
         )}
 
-        {state.step === 4 && state.selectedScenarioId && (
-          (() => {
-            const scenario = getScenarioById(state.selectedScenarioId!)!;
-            const result = evaluateScenario(
-              scenario,
-              {},
-              state.scenarioAnswers,
-              []
-            );
-            const report = buildProfessionalServicesReport({
-              reportId,
-              companyProfile: state.companyProfile as any,
-              commonAnswers: {},
-              scenarioResult: result,
-            });
-            return (
-              <ReportPage
-                report={report}
-                onStartNew={() => setState(INITIAL_STATE)}
-              />
-            );
-          })()
+        {state.step === 4 && (
+          loading ? (
+            <div style={{ textAlign: "center", padding: "60px" }}>
+              <p style={{ color: "#185FA5", fontWeight: 600 }}>
+                Generating your assessment...
+              </p>
+            </div>
+          ) : error ? (
+            <div style={{ textAlign: "center", padding: "40px", color: "#E24B4A" }}>
+              <p>{error}</p>
+              <button
+                onClick={() =>
+                  setState(prev => ({ ...prev, step: 3 as WizardStep }))
+                }
+              >
+                ← Try again
+              </button>
+            </div>
+          ) : report ? (
+            <ReportPage
+              report={report}
+              onStartNew={() => {
+                setState(INITIAL_STATE);
+                setReport(null);
+              }}
+            />
+          ) : null
         )}
       </div>
     </div>
