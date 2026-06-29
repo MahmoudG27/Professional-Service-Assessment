@@ -16,7 +16,20 @@ module "key_vault" {
   resource_group_name = module.resource_group.name
 
   tenant_id = var.tenant_id
-  object_id = var.object_id
+# object_id = var.object_id
+}
+
+resource "azurerm_role_assignment" "current_user_admin" {
+  scope                = module.key_vault.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
+
+  depends_on = [module.key_vault]
+}
+
+resource "time_sleep" "wait_for_kv_rbac" {
+  depends_on = [azurerm_role_assignment.current_user_admin]
+  create_duration = "60s"
 }
 
 module "monitoring" {
@@ -35,28 +48,12 @@ module "storage" {
   resource_group_name = module.resource_group.name
 }
 
-resource "azurerm_key_vault_secret" "storage_connection_string" {
-  name         = "storage-connection-string"
-  value        = module.storage.primary_connection_string
-  key_vault_id = module.key_vault.id
-
-  depends_on = [module.key_vault]
-}
-
 module "cosmos_db" {
   source              = "./modules/cosmos-db"
   project             = var.project
   environment         = var.environment
   location            = "northeurope"
   resource_group_name = module.resource_group.name
-}
-
-resource "azurerm_key_vault_secret" "cosmos_connection_string" {
-  name         = "cosmos-connection-string"
-  value        = module.cosmos_db.connection_string
-  key_vault_id = module.key_vault.id
-
-  depends_on = [module.key_vault]
 }
 
 module "functions" {
@@ -80,14 +77,6 @@ module "functions" {
   depends_on = [module.openai]
 }
 
-resource "azurerm_role_assignment" "current_user_admin" {
-  scope                = module.key_vault.id
-  role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
-
-  depends_on = [module.functions]
-}
-
 resource "azurerm_role_assignment" "functions" {
   scope                = module.key_vault.id
   role_definition_name = "Key Vault Secrets User"
@@ -96,11 +85,9 @@ resource "azurerm_role_assignment" "functions" {
   depends_on = [module.functions]
 }
 
-resource "azurerm_key_vault_secret" "system_prompt" {
-  name         = "system-prompt"
-  value        = var.system_prompt
-  key_vault_id = module.key_vault.id
-  depends_on   = [module.key_vault]
+resource "time_sleep" "wait_for_function_identity" {
+  depends_on = [azurerm_role_assignment.functions]
+  create_duration = "30s"
 }
 
 module "static_web_app" {
@@ -119,22 +106,6 @@ module "openai" {
   resource_group_name = module.resource_group.name
 }
 
-resource "azurerm_key_vault_secret" "openai_api_key" {
-  name         = "openai-api-key"
-  value        = module.openai.primary_key
-  key_vault_id = module.key_vault.id
-
-  depends_on = [module.key_vault]
-}
-
-resource "azurerm_key_vault_secret" "openai_endpoint" {
-  name         = "openai-endpoint"
-  value        = module.openai.endpoint
-  key_vault_id = module.key_vault.id
-
-  depends_on = [module.key_vault]
-}
-
 module "logic_apps" {
   source              = "./modules/logic-apps"
   project             = var.project
@@ -143,10 +114,50 @@ module "logic_apps" {
   resource_group_name = module.resource_group.name
 }
 
+resource "azurerm_key_vault_secret" "storage_connection_string" {
+  name         = "storage-connection-string"
+  value        = module.storage.primary_connection_string
+  key_vault_id = module.key_vault.id
+
+  depends_on = [time_sleep.wait_for_kv_rbac]
+}
+
+resource "azurerm_key_vault_secret" "cosmos_connection_string" {
+  name         = "cosmos-connection-string"
+  value        = module.cosmos_db.connection_string
+  key_vault_id = module.key_vault.id
+
+  depends_on = [time_sleep.wait_for_kv_rbac]
+}
+
+resource "azurerm_key_vault_secret" "system_prompt" {
+  name         = "system-prompt"
+  value        = var.system_prompt
+  key_vault_id = module.key_vault.id
+
+  depends_on = [time_sleep.wait_for_kv_rbac]
+}
+
+resource "azurerm_key_vault_secret" "openai_api_key" {
+  name         = "openai-api-key"
+  value        = module.openai.primary_key
+  key_vault_id = module.key_vault.id
+
+  depends_on = [time_sleep.wait_for_kv_rbac]
+}
+
+resource "azurerm_key_vault_secret" "openai_endpoint" {
+  name         = "openai-endpoint"
+  value        = module.openai.endpoint
+  key_vault_id = module.key_vault.id
+
+  depends_on = [time_sleep.wait_for_kv_rbac]
+}
+
 resource "azurerm_key_vault_secret" "logic_app_trigger_url" {
   name         = "logic-app-trigger-url"
   value        = module.logic_apps.trigger_url
   key_vault_id = module.key_vault.id
 
-  depends_on = [module.key_vault]
+  depends_on = [time_sleep.wait_for_kv_rbac]
 }
